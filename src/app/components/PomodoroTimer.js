@@ -1,102 +1,67 @@
 "use client";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from 'react';
+import { Button } from 'antd';
 
-export default function PomodoroTimer() {
-    const [timeLeft, setTimeLeft] = useState(1500);
-    const [timerRunning, setTimerRunning] = useState(false);
-    const [selectedTime, setSelectedTime] = useState(1500);
+export default function PomodoroTimer({ onSaveSession }) {
+    const [minutes, setMinutes] = useState(25);
+    const [seconds, setSeconds] = useState(0);
+    const [isActive, setIsActive] = useState(false);
+    const [initialDuration, setInitialDuration] = useState(25);
 
-    // Timer countdown logic
     useEffect(() => {
-        if (!timerRunning) return;
-        if (timeLeft <= 0) {
-            setTimerRunning(false);
-            // Optional: Add a notification sound here
-            return;
-        }
-        const timer = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
-        return () => clearInterval(timer);
-    }, [timerRunning, timeLeft]);
+        let interval = null;
+        if (isActive && (minutes > 0 || seconds > 0)) {
+            interval = setInterval(() => {
+                if (seconds === 0) {
+                    setMinutes(minutes - 1);
+                    setSeconds(59);
+                } else {
+                    setSeconds(seconds - 1);
+                }
+            }, 1000);
+        } else if (isActive && minutes === 0 && seconds === 0) {
+            // Timer finished
+            setIsActive(false);
 
-    // Log focus time when the timer is paused or stops, but not on initial reset
-    useEffect(() => {
-        const logFocusTime = async () => {
-            // Only log significant time chunks (e.g., more than 15 seconds)
-            const durationInSeconds = selectedTime - timeLeft;
-            if (durationInSeconds < 15) return;
-
-            try {
-                await fetch("/api/focus", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ duration: durationInSeconds }),
-                });
-            } catch (err) {
-                console.error("Focus log error:", err);
+            if (onSaveSession) {
+                // We save the duration in seconds (e.g., 25 min * 60s)
+                onSaveSession({ duration: initialDuration * 60 });
             }
-        };
 
-        if (!timerRunning && selectedTime > timeLeft) {
-            logFocusTime();
+            resetTimer(initialDuration);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [timerRunning]);
+        return () => clearInterval(interval);
+    }, [isActive, seconds, minutes, onSaveSession, initialDuration]);
 
-    const startTimer = (seconds) => {
-        setSelectedTime(seconds);
-        setTimeLeft(seconds);
-        setTimerRunning(true);
+    const toggleTimer = () => {
+        setIsActive(!isActive);
     };
 
-    const pauseTimer = () => setTimerRunning(false);
-
-    const resetTimer = () => {
-        setTimerRunning(false);
-        setTimeLeft(selectedTime);
+    const resetTimer = (duration) => {
+        setIsActive(false);
+        setInitialDuration(duration);
+        setMinutes(duration);
+        setSeconds(0);
     };
-
-    const timeOptions = [
-        { label: "25 min", seconds: 1500 },
-        { label: "10 min", seconds: 600 },
-        { label: "5 min", seconds: 300 },
-    ];
 
     return (
-        <div className="bg-card p-6 rounded-lg border border-border shadow-sm flex flex-col items-center justify-center h-full">
+        <div className="bg-card border border-border p-6 rounded-lg shadow-sm text-center flex flex-col justify-center items-center h-full">
             <h2 className="text-lg font-bold text-foreground mb-4">⏳ Pomodoro Timer</h2>
-            <div className="text-5xl font-mono text-primary font-bold tracking-wider mb-4">
-                {Math.floor(timeLeft / 60)
-                    .toString()
-                    .padStart(2, "0")}
-                :
-                {(timeLeft % 60).toString().padStart(2, "0")}
-            </div>
-            <div className="flex flex-wrap justify-center gap-2 mb-4">
-                {timeOptions.map((opt) => (
-                    <button
-                        key={opt.seconds}
-                        className="px-4 py-1.5 text-sm font-medium rounded-md transition-colors bg-muted text-muted-foreground enabled:hover:bg-primary enabled:hover:text-primary-foreground disabled:opacity-50"
-                        onClick={() => startTimer(opt.seconds)}
-                        disabled={timerRunning}
-                    >
-                        {opt.label}
-                    </button>
-                ))}
-            </div>
-            <div className="flex gap-3">
-                <button
-                    className="px-4 py-1.5 text-sm font-medium rounded-md transition-colors bg-red-500/20 text-red-400 hover:bg-red-500/40"
-                    onClick={pauseTimer}
-                    disabled={!timerRunning}
-                >
-                    Pause
-                </button>
-                <button
-                    className="px-4 py-1.5 text-sm font-medium rounded-md transition-colors bg-muted text-muted-foreground hover:bg-muted/80"
-                    onClick={resetTimer}
-                >
+            <p className="text-5xl md:text-7xl font-mono font-bold text-primary my-4">
+                {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+            </p>
+            <div className="flex gap-4 mb-4">
+                <Button onClick={toggleTimer} type="primary" size="large" danger={isActive} className={isActive ? "" : "!bg-primary hover:!bg-primary/90"}>
+                    {isActive ? 'Pause' : 'Start'}
+                </Button>
+                <Button onClick={() => resetTimer(initialDuration)} size="large" className="hover:!border-border hover:!text-foreground">
                     Reset
-                </button>
+                </Button>
+            </div>
+            <div className="flex gap-2">
+                <Button onClick={() => resetTimer(25)} type={initialDuration === 25 ? "primary" : "default"} className={initialDuration === 25 ? "!bg-primary/80" : "bg-muted text-muted-foreground"}>25 min</Button>
+                <Button onClick={() => resetTimer(10)} type={initialDuration === 10 ? "primary" : "default"} className={initialDuration === 10 ? "!bg-primary/80" : "bg-muted text-muted-foreground"}>10 min</Button>
+                <Button onClick={() => resetTimer(5)} type={initialDuration === 5 ? "primary" : "default"} className={initialDuration === 5 ? "!bg-primary/80" : "bg-muted text-muted-foreground"}>5 min</Button>
             </div>
         </div>
     );

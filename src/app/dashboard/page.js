@@ -172,6 +172,22 @@ export default function Dashboard() {
         }
     };
 
+    // --- Focus Session Mutation ---
+    const handleSaveFocusSession = async (sessionData) => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return message.error("You must be logged in.");
+
+        const sessionToInsert = { ...sessionData, user_id: user.id };
+        const { data, error } = await supabase.from('focus_sessions').insert(sessionToInsert).select().single();
+
+        if (error) {
+            message.error(`Failed to save session: ${error.message}`);
+        } else {
+            setFocusSessions((prev) => [data, ...prev]);
+            message.success('Focus session saved!');
+        }
+    };
+
     // --- JSX ---
     return (
         <div className="flex h-screen bg-background">
@@ -211,7 +227,7 @@ export default function Dashboard() {
                 />
 
                 <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <PomodoroTimer />
+                    <PomodoroTimer onSaveSession={handleSaveFocusSession} />
                     <StickyNotes
                         notes={notes}
                         onAddNote={handleAddNote}
@@ -221,7 +237,7 @@ export default function Dashboard() {
                 </div>
 
                 <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <FocusGraph />
+                    <FocusGraph sessions={focusSessions} />
                     <div className="bg-card border border-border p-6 rounded-lg shadow-sm text-foreground">
                         <h2 className="text-lg font-bold mb-4">📅 Today&apos;s Summary</h2>
                         <ul className="text-md space-y-3">
