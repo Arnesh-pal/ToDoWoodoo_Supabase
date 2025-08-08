@@ -1,71 +1,104 @@
 "use client";
-import React, { useState } from 'react';
-import { Input, Popconfirm, Button } from 'antd';
-import { DeleteOutlined } from '@ant-design/icons';
-import { FaStickyNote } from 'react-icons/fa';
+import { useState, useEffect, useRef } from "react";
+import Picker from "@emoji-mart/react";
+import data from "@emoji-mart/data";
 
 export default function StickyNotes({ notes, onAddNote, onUpdateNote, onDeleteNote }) {
-  const [newNoteContent, setNewNoteContent] = useState('');
+  const [newNote, setNewNote] = useState({ content: "", color: "#ffeb3b" });
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojiPickerRef = useRef(null);
 
-  const handleAddClick = () => {
-    if (newNoteContent.trim()) {
-      // Note: The color is hardcoded to yellow to match your UI.
-      // You can add a color picker back later if you wish.
-      onAddNote({ content: newNoteContent, color: 'yellow' });
-      setNewNoteContent('');
-    }
+  // This effect handles closing the emoji picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const addNote = () => {
+    if (!newNote.content.trim()) return;
+    // Call the onAddNote function passed from the dashboard
+    onAddNote(newNote);
+    // Reset the form locally
+    setNewNote({ content: "", color: "#ffeb3b" });
+  };
+
+  const deleteNote = (id) => {
+    // Call the onDeleteNote function passed from the dashboard
+    onDeleteNote(id);
   };
 
   return (
-    <div className="bg-card border border-border p-6 rounded-lg shadow-sm h-full flex flex-col">
-      <h2 className="text-lg font-bold mb-4 text-foreground flex items-center">
-        <FaStickyNote className="mr-2" />
-        Sticky Notes
-      </h2>
+    <div className="bg-card p-6 rounded-lg border border-border shadow-sm h-full flex flex-col">
+      <h2 className="text-lg font-bold text-foreground mb-4">📝 Sticky Notes</h2>
 
-      {/* Container for notes with vertical scrolling */}
-      <div className="flex-grow overflow-y-auto pr-2 -mr-2 space-y-3 mb-4">
-        {notes && notes.map(note => (
+      {/* Notes Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 flex-grow overflow-y-auto pr-2 min-h-[200px]">
+        {notes.map((note) => (
           <div
             key={note.id}
-            className="group relative p-3 rounded-md shadow-sm bg-yellow-300/80 flex justify-between items-start"
+            className="relative p-4 rounded-md shadow-md text-black transition-transform transform hover:scale-105 border border-black/10"
+            style={{ backgroundColor: note.color }}
           >
-            <p className="text-sm text-yellow-900 break-words pr-4">
-              {note.content}
-            </p>
-            <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Popconfirm
-                title="Delete this note?"
-                onConfirm={() => onDeleteNote(note.id)}
-                okText="Yes"
-                cancelText="No"
-                okButtonProps={{ danger: true }}
-              >
-                <button className="p-1 rounded-full hover:bg-black/10">
-                  <DeleteOutlined className="text-yellow-900/60" style={{ fontSize: '12px' }} />
-                </button>
-              </Popconfirm>
-            </div>
+            <button
+              className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center bg-black/20 text-white rounded-full hover:bg-black/40 transition-colors"
+              onClick={() => deleteNote(note.id)}
+              aria-label="Delete note"
+            >
+              &times;
+            </button>
+            <div className="whitespace-pre-wrap break-words mt-2">{note.content}</div>
           </div>
         ))}
       </div>
 
-      {/* Input area for new notes at the bottom */}
-      <div className="mt-auto flex flex-col gap-2">
-        <Input.TextArea
-          value={newNoteContent}
-          onChange={(e) => setNewNoteContent(e.target.value)}
+      {/* Add New Note Form */}
+      <div className="mt-4 pt-4 border-t border-border">
+        <textarea
+          value={newNote.content}
+          onChange={(e) => setNewNote({ ...newNote, content: e.target.value })}
+          className="w-full p-2 rounded-md bg-muted text-foreground border-border focus:border-primary focus:ring-0 placeholder:text-muted-foreground min-h-[80px]"
           placeholder="Write your note..."
-          autoSize={{ minRows: 2, maxRows: 4 }}
-          className="!bg-muted !text-foreground !border-border focus:!border-primary focus:!shadow-none placeholder:!text-muted-foreground"
         />
-        <Button
-          onClick={handleAddClick}
-          type="primary"
-          className="!bg-primary hover:!bg-primary/90"
-        >
-          Add Note
-        </Button>
+        <div className="flex items-center gap-4 mt-2">
+          <input
+            type="color"
+            value={newNote.color}
+            onChange={(e) => setNewNote({ ...newNote, color: e.target.value })}
+            className="w-8 h-8 p-0 border-none rounded-md cursor-pointer bg-transparent"
+            title="Pick background color"
+          />
+          <div className="relative">
+            <button
+              className="px-3 py-1.5 text-sm font-medium rounded-md bg-muted text-muted-foreground hover:bg-muted/80"
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            >
+              😊
+            </button>
+            {showEmojiPicker && (
+              <div ref={emojiPickerRef} className="absolute z-20 bottom-full mb-2">
+                <Picker
+                  data={data}
+                  onEmojiSelect={(emoji) => {
+                    setNewNote({ ...newNote, content: newNote.content + emoji.native });
+                    setShowEmojiPicker(false);
+                  }}
+                  theme="dark"
+                />
+              </div>
+            )}
+          </div>
+          <button
+            className="ml-auto px-4 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
+            onClick={addNote}
+          >
+            Add Note
+          </button>
+        </div>
       </div>
     </div>
   );
