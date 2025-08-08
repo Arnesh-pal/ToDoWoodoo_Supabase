@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from 'antd';
 
 export default function PomodoroTimer({ onSaveSession }) {
@@ -7,38 +7,34 @@ export default function PomodoroTimer({ onSaveSession }) {
     const [timeLeft, setTimeLeft] = useState(initialDuration);
     const [isActive, setIsActive] = useState(false);
 
-    // Use a ref to hold the interval ID to ensure it's stable across re-renders
+    // Use a ref for the interval to prevent issues with closures
     const intervalRef = useRef(null);
+
+    const handleTimerEnd = useCallback(() => {
+        setIsActive(false);
+        if (onSaveSession) {
+            // Save the original duration, not the final second
+            onSaveSession({ duration: initialDuration });
+        }
+    }, [onSaveSession, initialDuration]);
 
     useEffect(() => {
         if (isActive) {
             intervalRef.current = setInterval(() => {
-                setTimeLeft((prev) => {
-                    if (prev <= 1) {
-                        // Timer is about to finish
-                        clearInterval(intervalRef.current);
-                        setIsActive(false);
-
-                        console.log('TIMER FINISHED - Attempting to call onSaveSession...'); // <-- DEBUGGING LINE ADDED
-
-                        // Call the save function from the dashboard
-                        if (onSaveSession) {
-                            onSaveSession({ duration: initialDuration });
-                        }
-
-                        // Reset for the next session
-                        return initialDuration;
-                    }
-                    return prev - 1;
-                });
+                setTimeLeft(prev => prev - 1);
             }, 1000);
         } else {
             clearInterval(intervalRef.current);
         }
-
-        // Cleanup function to clear the interval when the component unmounts
         return () => clearInterval(intervalRef.current);
-    }, [isActive, initialDuration, onSaveSession]);
+    }, [isActive]);
+
+    // This separate effect watches for when the timer reaches zero
+    useEffect(() => {
+        if (timeLeft <= 0 && isActive) {
+            handleTimerEnd();
+        }
+    }, [timeLeft, isActive, handleTimerEnd]);
 
     const toggleTimer = () => {
         setIsActive(!isActive);
