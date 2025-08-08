@@ -159,7 +159,7 @@ export default function Dashboard() {
         if (error) {
             message.error(`Failed to update note: ${error.message}`);
         } else {
-            setNotes((prev) => prev.map((note) => (note.id === data.id ? data : note)));
+            setNotes((prev) => prev.map((note) => (note.id === data.id ? data : task)));
         }
     };
 
@@ -174,6 +174,8 @@ export default function Dashboard() {
 
     // --- Focus Session Mutation ---
     const handleSaveFocusSession = async (sessionData) => {
+        console.log('DASHBOARD - handleSaveFocusSession was called with:', sessionData); // <-- DEBUGGING LINE ADDED
+
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return message.error("You must be logged in.");
 

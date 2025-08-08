@@ -19,6 +19,8 @@ export default function PomodoroTimer({ onSaveSession }) {
                         clearInterval(intervalRef.current);
                         setIsActive(false);
 
+                        console.log('TIMER FINISHED - Attempting to call onSaveSession...'); // <-- DEBUGGING LINE ADDED
+
                         // Call the save function from the dashboard
                         if (onSaveSession) {
                             onSaveSession({ duration: initialDuration });
@@ -70,6 +72,7 @@ export default function PomodoroTimer({ onSaveSession }) {
                 <Button onClick={() => resetTimer(25)} type={(initialDuration / 60) === 25 ? "primary" : "default"} className={(initialDuration / 60) === 25 ? "!bg-primary/80" : "bg-muted text-muted-foreground"}>25 min</Button>
                 <Button onClick={() => resetTimer(10)} type={(initialDuration / 60) === 10 ? "primary" : "default"} className={(initialDuration / 60) === 10 ? "!bg-primary/80" : "bg-muted text-muted-foreground"}>10 min</Button>
                 <Button onClick={() => resetTimer(5)} type={(initialDuration / 60) === 5 ? "primary" : "default"} className={(initialDuration / 60) === 5 ? "!bg-primary/80" : "bg-muted text-muted-foreground"}>5 min</Button>
+                <Button onClick={() => resetTimer(1 / 12)}>5 sec</Button> {/* <-- TEST BUTTON ADDED */}
             </div>
         </div>
     );
