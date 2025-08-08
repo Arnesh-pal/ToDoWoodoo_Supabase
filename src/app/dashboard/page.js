@@ -124,7 +124,6 @@ export default function Dashboard() {
     };
 
     const handleToggleComplete = async (taskToToggle) => {
-        // Add updated_at field to track when a task was completed
         await handleUpdateTask({ id: taskToToggle.id, completed: !taskToToggle.completed, updated_at: new Date().toISOString() });
     };
 
@@ -140,13 +139,14 @@ export default function Dashboard() {
     // --- Note Mutations ---
     const handleAddNote = async (newNoteData) => {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return message.error("You must be logged in.");
+        if (!user) return message.error("You must be logged in to add a note.");
 
         const noteToInsert = { ...newNoteData, user_id: user.id };
         const { data, error } = await supabase.from('notes').insert(noteToInsert).select().single();
 
-        if (error) message.error(`Failed to add note: ${error.message}`);
-        else {
+        if (error) {
+            message.error(`Failed to add note: ${error.message}`);
+        } else {
             setNotes((prev) => [data, ...prev]);
         }
     };
@@ -156,16 +156,18 @@ export default function Dashboard() {
         const { id, ...noteToUpdate } = updatedNoteData;
         const { data, error } = await supabase.from('notes').update(noteToUpdate).eq('id', id).select().single();
 
-        if (error) message.error(`Failed to update note: ${error.message}`);
-        else {
+        if (error) {
+            message.error(`Failed to update note: ${error.message}`);
+        } else {
             setNotes((prev) => prev.map((note) => (note.id === data.id ? data : note)));
         }
     };
 
     const handleDeleteNote = async (noteId) => {
         const { error } = await supabase.from('notes').delete().eq('id', noteId);
-        if (error) message.error(`Failed to delete note: ${error.message}`);
-        else {
+        if (error) {
+            message.error(`Failed to delete note: ${error.message}`);
+        } else {
             setNotes((prev) => prev.filter((note) => note.id !== noteId));
         }
     };
@@ -221,7 +223,7 @@ export default function Dashboard() {
                 <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <FocusGraph />
                     <div className="bg-card border border-border p-6 rounded-lg shadow-sm text-foreground">
-                        <h2 className="text-lg font-bold mb-4">📅 Today&apos;s Summary</h2>
+                        <h2 className="text-lg font-bold mb-4">📅 Today's Summary</h2>
                         <ul className="text-md space-y-3">
                             <li className="flex justify-between items-center">
                                 <span className="text-muted-foreground">✅ Tasks Completed</span>
