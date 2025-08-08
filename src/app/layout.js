@@ -1,6 +1,5 @@
 import localFont from "next/font/local";
 import "./globals.css";
-import SessionWrapper from "./components/SessionWrapper"; // <-- CORRECTED PATH
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
