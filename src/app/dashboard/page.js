@@ -80,15 +80,14 @@ export default function Dashboard() {
             return;
         }
 
-        // Create a clean object for insertion. This ensures we only send
-        // the data we want and lets the database handle the 'created_at' field.
-        const taskToInsert = {
-            title: newTaskData.title,
-            description: newTaskData.description,
-            date: newTaskData.date,
-            completed: newTaskData.completed || false, // Ensure a default value
-            user_id: user.id,
-        };
+        // ** The New Fix **
+        // Directly delete the problematic property from the incoming object.
+        // This ensures it is not part of the 'insert' request at all.
+        delete newTaskData.created_at;
+        delete newTaskData.id; // Also good to remove any temporary ID
+
+        // Add the user_id to the cleaned-up object
+        const taskToInsert = { ...newTaskData, user_id: user.id };
 
         const { data, error } = await supabase
             .from('tasks')
@@ -100,12 +99,10 @@ export default function Dashboard() {
             console.error("Error adding task:", error);
             message.error(`Failed to add task: ${error.message}`);
         } else {
-            // The 'data' object returned from Supabase will include the correct 'created_at' value
             setTasks((prevTasks) => [data, ...prevTasks]);
             message.success('Task added successfully!');
         }
     };
-
     const handleUpdateTask = async (updatedTaskData) => {
         const { id, ...taskToUpdate } = updatedTaskData;
         const { data, error } = await supabase
