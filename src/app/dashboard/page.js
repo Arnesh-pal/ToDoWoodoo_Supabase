@@ -47,7 +47,7 @@ export default function Dashboard() {
             window.removeEventListener("resize", handleResize);
             authListener.subscription.unsubscribe();
         };
-    }, [router, supabase.auth]); // Added dependencies
+    }, [router, supabase.auth]);
 
     const fetchTasks = async () => {
         const { data, error } = await supabase
@@ -92,8 +92,8 @@ export default function Dashboard() {
     };
 
     const handleUpdateTask = async (updatedTaskData) => {
-        // *** THIS IS THE CRITICAL FIX ***
-        // Clean the object before updating
+        // *** THE CRITICAL FIX IS HERE ***
+        // We MUST delete created_at before updating to prevent sending a null value
         delete updatedTaskData.created_at;
 
         const { id, ...taskToUpdate } = updatedTaskData;
