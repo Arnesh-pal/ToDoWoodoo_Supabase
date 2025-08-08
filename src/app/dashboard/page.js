@@ -73,7 +73,6 @@ export default function Dashboard() {
     };
 
     const handleAddTask = async (newTaskData) => {
-        // 1. Get the current user's data first
         const { data: { user } } = await supabase.auth.getUser();
 
         if (!user) {
@@ -81,20 +80,27 @@ export default function Dashboard() {
             return;
         }
 
-        // 2. Create a new object that includes the user's ID
-        const taskWithUserId = { ...newTaskData, user_id: user.id };
+        // Create a clean object for insertion. This ensures we only send
+        // the data we want and lets the database handle the 'created_at' field.
+        const taskToInsert = {
+            title: newTaskData.title,
+            description: newTaskData.description,
+            date: newTaskData.date,
+            completed: newTaskData.completed || false, // Ensure a default value
+            user_id: user.id,
+        };
 
         const { data, error } = await supabase
             .from('tasks')
-            .insert([taskWithUserId]) // 3. Insert the object with the user_id
+            .insert([taskToInsert])
             .select()
             .single();
 
         if (error) {
             console.error("Error adding task:", error);
-            // Show the specific error from the database for better debugging
             message.error(`Failed to add task: ${error.message}`);
         } else {
+            // The 'data' object returned from Supabase will include the correct 'created_at' value
             setTasks((prevTasks) => [data, ...prevTasks]);
             message.success('Task added successfully!');
         }
