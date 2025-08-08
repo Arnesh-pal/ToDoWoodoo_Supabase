@@ -12,6 +12,8 @@
     "@ant-design/compatible": "^5.1.4",
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
+    "@supabase/ssr": "^0.6.1",
+    "@supabase/supabase-js": "^2.54.0",
     "antd": "^5.24.1",
     "dayjs": "^1.11.13",
     "lottie-react": "^2.4.1",
