@@ -26,7 +26,7 @@ export default function Sidebar({ onFilterChange, activeTab, setActiveTab }) {
       }
     };
     getUserData();
-  }, []);
+  }, [supabase.auth]);
 
   const navItems = [
     { id: "all", label: "All Tasks", icon: <FaTasks /> },
