@@ -73,15 +73,27 @@ export default function Dashboard() {
     };
 
     const handleAddTask = async (newTaskData) => {
+        // 1. Get the current user's data first
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (!user) {
+            message.error("You must be logged in to add a task.");
+            return;
+        }
+
+        // 2. Create a new object that includes the user's ID
+        const taskWithUserId = { ...newTaskData, user_id: user.id };
+
         const { data, error } = await supabase
             .from('tasks')
-            .insert([newTaskData])
+            .insert([taskWithUserId]) // 3. Insert the object with the user_id
             .select()
-            .single(); // .single() returns the newly created object
+            .single();
 
         if (error) {
             console.error("Error adding task:", error);
-            message.error('Failed to add task');
+            // Show the specific error from the database for better debugging
+            message.error(`Failed to add task: ${error.message}`);
         } else {
             setTasks((prevTasks) => [data, ...prevTasks]);
             message.success('Task added successfully!');
