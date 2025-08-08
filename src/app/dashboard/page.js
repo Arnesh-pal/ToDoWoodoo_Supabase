@@ -11,7 +11,9 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from 'next/navigation';
 
 export default function Dashboard() {
+    // State Management
     const [tasks, setTasks] = useState([]);
+    const [notes, setNotes] = useState([]); // <-- Added state for notes
     const [filter, setFilter] = useState("all");
     const [activeTab, setActiveTab] = useState("all");
     const [sidebarVisible, setSidebarVisible] = useState(false);
@@ -35,7 +37,7 @@ export default function Dashboard() {
             async (event, session) => {
                 if (session) {
                     setLoading(true);
-                    await fetchTasks();
+                    await Promise.all([fetchTasks(), fetchNotes()]); // <-- Fetch both tasks and notes
                     setLoading(false);
                 } else {
                     router.push('/Login');
@@ -48,6 +50,8 @@ export default function Dashboard() {
             authListener.subscription.unsubscribe();
         };
     }, [router, supabase.auth]);
+
+    // --- Data Fetching ---
 
     const fetchTasks = async () => {
         const { data, error } = await supabase
@@ -63,55 +67,48 @@ export default function Dashboard() {
         }
     };
 
+    // <-- Added function to fetch notes -->
+    const fetchNotes = async () => {
+        const { data, error } = await supabase
+            .from('notes')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error("Error fetching notes:", error);
+            message.error("Failed to load notes");
+        } else {
+            setNotes(data);
+        }
+    };
+
+    // --- Task Mutations ---
+
     const handleAddTask = async (newTaskData) => {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-            message.error("You must be logged in to add a task.");
-            return;
-        }
+        if (!user) return;
 
-        // Clean the object before inserting
         delete newTaskData.id;
         delete newTaskData.created_at;
 
         const taskToInsert = { ...newTaskData, user_id: user.id };
+        const { data, error } = await supabase.from('tasks').insert(taskToInsert).select().single();
 
-        const { data, error } = await supabase
-            .from('tasks')
-            .insert([taskToInsert])
-            .select()
-            .single();
-
-        if (error) {
-            console.error("Error adding task:", error);
-            message.error(`Failed to add task: ${error.message}`);
-        } else {
-            setTasks((prevTasks) => [data, ...prevTasks]);
-            message.success('Task added successfully!');
+        if (error) message.error(`Failed to add task: ${error.message}`);
+        else {
+            setTasks((prev) => [data, ...prev]);
+            message.success('Task added!');
         }
     };
 
     const handleUpdateTask = async (updatedTaskData) => {
-        // *** THE CRITICAL FIX IS HERE ***
-        // We MUST delete created_at before updating to prevent sending a null value
         delete updatedTaskData.created_at;
-
         const { id, ...taskToUpdate } = updatedTaskData;
+        const { data, error } = await supabase.from('tasks').update(taskToUpdate).eq('id', id).select().single();
 
-        const { data, error } = await supabase
-            .from('tasks')
-            .update(taskToUpdate)
-            .eq('id', id)
-            .select()
-            .single();
-
-        if (error) {
-            console.error("Error updating task:", error);
-            message.error(`Failed to update task: ${error.message}`);
-        } else {
-            setTasks((prevTasks) =>
-                prevTasks.map((task) => (task.id === data.id ? data : task))
-            );
+        if (error) message.error(`Failed to update task: ${error.message}`);
+        else {
+            setTasks((prev) => prev.map((task) => (task.id === data.id ? data : task)));
             message.success('Task updated!');
         }
     };
@@ -122,16 +119,20 @@ export default function Dashboard() {
 
     const handleDeleteTask = async (taskId) => {
         const { error } = await supabase.from('tasks').delete().eq('id', taskId);
-
-        if (error) {
-            console.error("Error deleting task:", error);
-            message.error('Failed to delete task');
-        } else {
-            setTasks((prevTasks) => prevTasks.filter((task) => task.id !== taskId));
+        if (error) message.error(`Failed to delete task: ${error.message}`);
+        else {
+            setTasks((prev) => prev.filter((task) => task.id !== taskId));
             message.success('Task deleted.');
         }
     };
 
+    // <-- Added placeholder functions for note mutations -->
+    const handleAddNote = async (newNoteData) => { /* Similar logic to handleAddTask */ };
+    const handleUpdateNote = async (updatedNoteData) => { /* Similar logic to handleUpdateTask */ };
+    const handleDeleteNote = async (noteId) => { /* Similar logic to handleDeleteTask */ };
+
+
+    // --- JSX ---
     return (
         <div className="flex h-screen bg-background">
             <div className="hidden lg:block lg:w-64">
@@ -171,7 +172,13 @@ export default function Dashboard() {
 
                 <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <PomodoroTimer />
-                    <StickyNotes />
+                    {/* Pass notes and handlers to the StickyNotes component */}
+                    <StickyNotes
+                        notes={notes}
+                        onAddNote={handleAddNote}
+                        onUpdateNote={handleUpdateNote}
+                        onDeleteNote={handleDeleteNote}
+                    />
                 </div>
 
                 <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
