@@ -7,7 +7,7 @@ import FocusGraph from "../components/FocusGraph";
 import StickyNotes from "../components/StickyNotes";
 import PomodoroTimer from "../components/PomodoroTimer";
 import { FaBars } from "react-icons/fa";
-import { createClient } from "@/lib/supabase/client"; // Import Supabase client
+import { createClient } from "@/lib/supabase/client";
 import { useRouter } from 'next/navigation';
 
 export default function Dashboard() {
@@ -23,40 +23,31 @@ export default function Dashboard() {
         totalFocusTime: 0,
     });
 
-    // Instantiate Supabase client
     const supabase = createClient();
     const router = useRouter();
 
     useEffect(() => {
-        // This effect runs once to set up everything
         const handleResize = () => setIsMobile(window.innerWidth < 1024);
         handleResize();
         window.addEventListener("resize", handleResize);
 
-        // Listen for authentication changes (login/logout)
         const { data: authListener } = supabase.auth.onAuthStateChange(
             async (event, session) => {
                 if (session) {
-                    // User is logged in, fetch their data
                     setLoading(true);
                     await fetchTasks();
-                    // You can add back fetchFocusData() here if you refactor it for Supabase
                     setLoading(false);
                 } else {
-                    // User is logged out, redirect to login
                     router.push('/Login');
                 }
             }
         );
 
-        // Cleanup function
         return () => {
             window.removeEventListener("resize", handleResize);
             authListener.subscription.unsubscribe();
         };
-    }, []);
-
-    // --- Data Fetching and Mutations with Supabase ---
+    }, [router, supabase.auth]); // Added dependencies
 
     const fetchTasks = async () => {
         const { data, error } = await supabase
@@ -74,19 +65,15 @@ export default function Dashboard() {
 
     const handleAddTask = async (newTaskData) => {
         const { data: { user } } = await supabase.auth.getUser();
-
         if (!user) {
             message.error("You must be logged in to add a task.");
             return;
         }
 
-        // ** The New Fix **
-        // Directly delete the problematic property from the incoming object.
-        // This ensures it is not part of the 'insert' request at all.
+        // Clean the object before inserting
+        delete newTaskData.id;
         delete newTaskData.created_at;
-        delete newTaskData.id; // Also good to remove any temporary ID
 
-        // Add the user_id to the cleaned-up object
         const taskToInsert = { ...newTaskData, user_id: user.id };
 
         const { data, error } = await supabase
@@ -103,8 +90,14 @@ export default function Dashboard() {
             message.success('Task added successfully!');
         }
     };
+
     const handleUpdateTask = async (updatedTaskData) => {
+        // *** THIS IS THE CRITICAL FIX ***
+        // Clean the object before updating
+        delete updatedTaskData.created_at;
+
         const { id, ...taskToUpdate } = updatedTaskData;
+
         const { data, error } = await supabase
             .from('tasks')
             .update(taskToUpdate)
@@ -114,7 +107,7 @@ export default function Dashboard() {
 
         if (error) {
             console.error("Error updating task:", error);
-            message.error('Failed to update task');
+            message.error(`Failed to update task: ${error.message}`);
         } else {
             setTasks((prevTasks) =>
                 prevTasks.map((task) => (task.id === data.id ? data : task))
@@ -124,8 +117,7 @@ export default function Dashboard() {
     };
 
     const handleToggleComplete = async (taskToToggle) => {
-        const { id, completed } = taskToToggle;
-        await handleUpdateTask({ id, completed: !completed });
+        await handleUpdateTask({ id: taskToToggle.id, completed: !taskToToggle.completed });
     };
 
     const handleDeleteTask = async (taskId) => {
@@ -140,7 +132,6 @@ export default function Dashboard() {
         }
     };
 
-    // --- JSX ---
     return (
         <div className="flex h-screen bg-background">
             <div className="hidden lg:block lg:w-64">
