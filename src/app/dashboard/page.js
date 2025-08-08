@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { message } from "antd";
 import Sidebar from "../components/Sidebar";
 import TaskGrid from "../components/TaskGrid";
@@ -11,23 +11,45 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from 'next/navigation';
 
 export default function Dashboard() {
-    // State Management
+    // --- State Management ---
     const [tasks, setTasks] = useState([]);
-    const [notes, setNotes] = useState([]); // <-- Added state for notes
+    const [notes, setNotes] = useState([]);
+    const [focusSessions, setFocusSessions] = useState([]);
     const [filter, setFilter] = useState("all");
     const [activeTab, setActiveTab] = useState("all");
     const [sidebarVisible, setSidebarVisible] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
     const [loading, setLoading] = useState(true);
     const [taskSummary, setTaskSummary] = useState({
-        tasksCompletedToday: 0,
-        focusSessionsToday: 0,
+        tasksCompleted: 0,
+        focusSessions: 0,
         totalFocusTime: 0,
     });
 
     const supabase = createClient();
     const router = useRouter();
 
+    // --- Data Fetching ---
+    const fetchTasks = useCallback(async () => {
+        const { data, error } = await supabase.from('tasks').select('*').order('created_at', { ascending: false });
+        if (error) message.error("Failed to load tasks");
+        else setTasks(data || []);
+    }, [supabase]);
+
+    const fetchNotes = useCallback(async () => {
+        const { data, error } = await supabase.from('notes').select('*').order('created_at', { ascending: false });
+        if (error) message.error("Failed to load notes");
+        else setNotes(data || []);
+    }, [supabase]);
+
+    const fetchFocusSessions = useCallback(async () => {
+        const { data, error } = await supabase.from('focus_sessions').select('*').order('date', { ascending: false });
+        if (error) message.error("Failed to load focus sessions");
+        else setFocusSessions(data || []);
+    }, [supabase]);
+
+    // --- Effects ---
+    // Initial data load on auth change
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 1024);
         handleResize();
@@ -37,56 +59,44 @@ export default function Dashboard() {
             async (event, session) => {
                 if (session) {
                     setLoading(true);
-                    await Promise.all([fetchTasks(), fetchNotes()]); // <-- Fetch both tasks and notes
+                    await Promise.all([fetchTasks(), fetchNotes(), fetchFocusSessions()]);
                     setLoading(false);
                 } else {
                     router.push('/Login');
                 }
             }
         );
-
         return () => {
             window.removeEventListener("resize", handleResize);
             authListener.subscription.unsubscribe();
         };
-    }, [router, supabase.auth]);
+    }, [router, supabase.auth, fetchTasks, fetchNotes, fetchFocusSessions]);
 
-    // --- Data Fetching ---
+    // Summary Calculation
+    useEffect(() => {
+        const today = new Date().toISOString().split('T')[0];
 
-    const fetchTasks = async () => {
-        const { data, error } = await supabase
-            .from('tasks')
-            .select('*')
-            .order('created_at', { ascending: false });
+        const completedToday = tasks.filter(task =>
+            task.completed && task.updated_at?.startsWith(today)
+        ).length;
 
-        if (error) {
-            console.error("Error fetching tasks:", error);
-            message.error("Failed to load tasks");
-        } else {
-            setTasks(data);
-        }
-    };
+        const focusToday = focusSessions.filter(session =>
+            session.date?.startsWith(today)
+        );
 
-    // <-- Added function to fetch notes -->
-    const fetchNotes = async () => {
-        const { data, error } = await supabase
-            .from('notes')
-            .select('*')
-            .order('created_at', { ascending: false });
+        const totalSeconds = focusToday.reduce((sum, session) => sum + session.duration, 0);
 
-        if (error) {
-            console.error("Error fetching notes:", error);
-            message.error("Failed to load notes");
-        } else {
-            setNotes(data);
-        }
-    };
+        setTaskSummary({
+            tasksCompleted: completedToday,
+            focusSessions: focusToday.length,
+            totalFocusTime: Math.round(totalSeconds / 60)
+        });
+    }, [tasks, focusSessions]);
 
     // --- Task Mutations ---
-
     const handleAddTask = async (newTaskData) => {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user) return message.error("You must be logged in.");
 
         delete newTaskData.id;
         delete newTaskData.created_at;
@@ -114,7 +124,8 @@ export default function Dashboard() {
     };
 
     const handleToggleComplete = async (taskToToggle) => {
-        await handleUpdateTask({ id: taskToToggle.id, completed: !taskToToggle.completed });
+        // Add updated_at field to track when a task was completed
+        await handleUpdateTask({ id: taskToToggle.id, completed: !taskToToggle.completed, updated_at: new Date().toISOString() });
     };
 
     const handleDeleteTask = async (taskId) => {
@@ -126,11 +137,38 @@ export default function Dashboard() {
         }
     };
 
-    // <-- Added placeholder functions for note mutations -->
-    const handleAddNote = async (newNoteData) => { /* Similar logic to handleAddTask */ };
-    const handleUpdateNote = async (updatedNoteData) => { /* Similar logic to handleUpdateTask */ };
-    const handleDeleteNote = async (noteId) => { /* Similar logic to handleDeleteTask */ };
+    // --- Note Mutations ---
+    const handleAddNote = async (newNoteData) => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return message.error("You must be logged in.");
 
+        const noteToInsert = { ...newNoteData, user_id: user.id };
+        const { data, error } = await supabase.from('notes').insert(noteToInsert).select().single();
+
+        if (error) message.error(`Failed to add note: ${error.message}`);
+        else {
+            setNotes((prev) => [data, ...prev]);
+        }
+    };
+
+    const handleUpdateNote = async (updatedNoteData) => {
+        delete updatedNoteData.created_at;
+        const { id, ...noteToUpdate } = updatedNoteData;
+        const { data, error } = await supabase.from('notes').update(noteToUpdate).eq('id', id).select().single();
+
+        if (error) message.error(`Failed to update note: ${error.message}`);
+        else {
+            setNotes((prev) => prev.map((note) => (note.id === data.id ? data : note)));
+        }
+    };
+
+    const handleDeleteNote = async (noteId) => {
+        const { error } = await supabase.from('notes').delete().eq('id', noteId);
+        if (error) message.error(`Failed to delete note: ${error.message}`);
+        else {
+            setNotes((prev) => prev.filter((note) => note.id !== noteId));
+        }
+    };
 
     // --- JSX ---
     return (
@@ -172,7 +210,6 @@ export default function Dashboard() {
 
                 <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <PomodoroTimer />
-                    {/* Pass notes and handlers to the StickyNotes component */}
                     <StickyNotes
                         notes={notes}
                         onAddNote={handleAddNote}
@@ -188,11 +225,11 @@ export default function Dashboard() {
                         <ul className="text-md space-y-3">
                             <li className="flex justify-between items-center">
                                 <span className="text-muted-foreground">✅ Tasks Completed</span>
-                                <span className="font-bold text-green-400 text-lg">{taskSummary.tasksCompletedToday}</span>
+                                <span className="font-bold text-green-400 text-lg">{taskSummary.tasksCompleted}</span>
                             </li>
                             <li className="flex justify-between items-center">
                                 <span className="text-muted-foreground">⏳ Focus Sessions</span>
-                                <span className="font-bold text-yellow-400 text-lg">{taskSummary.focusSessionsToday}</span>
+                                <span className="font-bold text-yellow-400 text-lg">{taskSummary.focusSessions}</span>
                             </li>
                             <li className="flex justify-between items-center">
                                 <span className="text-muted-foreground">🔥 Total Focus Time</span>
