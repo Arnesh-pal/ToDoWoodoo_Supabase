@@ -1,51 +1,52 @@
 "use client";
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from 'antd';
 
 export default function PomodoroTimer({ onSaveSession }) {
-    const [initialDuration, setInitialDuration] = useState(25 * 60); // Time in seconds
-    const [timeLeft, setTimeLeft] = useState(initialDuration);
+    const [duration, setDuration] = useState(25 * 60); // Total duration in seconds
+    const [timeLeft, setTimeLeft] = useState(duration);
     const [isActive, setIsActive] = useState(false);
 
-    // Use a ref for the interval to prevent issues with closures
+    // Use refs to store interval and callbacks to avoid stale closures
     const intervalRef = useRef(null);
+    const onSaveSessionRef = useRef(onSaveSession);
 
-    const handleTimerEnd = useCallback(() => {
-        setIsActive(false);
-        if (onSaveSession) {
-            // Save the original duration, not the final second
-            onSaveSession({ duration: initialDuration });
-        }
-    }, [onSaveSession, initialDuration]);
+    // Keep the onSaveSession ref updated with the latest prop
+    useEffect(() => {
+        onSaveSessionRef.current = onSaveSession;
+    }, [onSaveSession]);
+
+    const startTimer = () => setIsActive(true);
+    const pauseTimer = () => setIsActive(false);
+
+    const resetTimer = (newDurationInMinutes) => {
+        pauseTimer();
+        const newDurationInSeconds = newDurationInMinutes * 60;
+        setDuration(newDurationInSeconds);
+        setTimeLeft(newDurationInSeconds);
+    };
 
     useEffect(() => {
         if (isActive) {
             intervalRef.current = setInterval(() => {
-                setTimeLeft(prev => prev - 1);
+                setTimeLeft((prevTime) => {
+                    const newTime = prevTime - 1;
+                    if (newTime <= 0) {
+                        clearInterval(intervalRef.current);
+                        setIsActive(false);
+                        if (onSaveSessionRef.current) {
+                            onSaveSessionRef.current({ duration });
+                        }
+                        return duration; // Reset for next run
+                    }
+                    return newTime;
+                });
             }, 1000);
-        } else {
-            clearInterval(intervalRef.current);
         }
+
+        // Cleanup interval on unmount or when isActive becomes false
         return () => clearInterval(intervalRef.current);
-    }, [isActive]);
-
-    // This separate effect watches for when the timer reaches zero
-    useEffect(() => {
-        if (timeLeft <= 0 && isActive) {
-            handleTimerEnd();
-        }
-    }, [timeLeft, isActive, handleTimerEnd]);
-
-    const toggleTimer = () => {
-        setIsActive(!isActive);
-    };
-
-    const resetTimer = (durationInMinutes) => {
-        setIsActive(false);
-        const durationInSeconds = durationInMinutes * 60;
-        setInitialDuration(durationInSeconds);
-        setTimeLeft(durationInSeconds);
-    };
+    }, [isActive, duration]);
 
     const minutes = Math.floor(timeLeft / 60);
     const seconds = timeLeft % 60;
@@ -57,18 +58,18 @@ export default function PomodoroTimer({ onSaveSession }) {
                 {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
             </p>
             <div className="flex gap-4 mb-4">
-                <Button onClick={toggleTimer} type="primary" size="large" danger={isActive} className={isActive ? "" : "!bg-primary hover:!bg-primary/90"}>
+                <Button onClick={isActive ? pauseTimer : startTimer} type="primary" size="large" danger={isActive} className={isActive ? "" : "!bg-primary hover:!bg-primary/90"}>
                     {isActive ? 'Pause' : 'Start'}
                 </Button>
-                <Button onClick={() => resetTimer(initialDuration / 60)} size="large" className="hover:!border-border hover:!text-foreground">
+                <Button onClick={() => resetTimer(duration / 60)} size="large" className="hover:!border-border hover:!text-foreground">
                     Reset
                 </Button>
             </div>
             <div className="flex gap-2">
-                <Button onClick={() => resetTimer(25)} type={(initialDuration / 60) === 25 ? "primary" : "default"} className={(initialDuration / 60) === 25 ? "!bg-primary/80" : "bg-muted text-muted-foreground"}>25 min</Button>
-                <Button onClick={() => resetTimer(10)} type={(initialDuration / 60) === 10 ? "primary" : "default"} className={(initialDuration / 60) === 10 ? "!bg-primary/80" : "bg-muted text-muted-foreground"}>10 min</Button>
-                <Button onClick={() => resetTimer(5)} type={(initialDuration / 60) === 5 ? "primary" : "default"} className={(initialDuration / 60) === 5 ? "!bg-primary/80" : "bg-muted text-muted-foreground"}>5 min</Button>
-                <Button onClick={() => resetTimer(1 / 12)}>5 sec</Button> {/* <-- TEST BUTTON ADDED */}
+                <Button onClick={() => resetTimer(25)} type={(duration / 60) === 25 ? "primary" : "default"} className={(duration / 60) === 25 ? "!bg-primary/80" : "bg-muted text-muted-foreground"}>25 min</Button>
+                <Button onClick={() => resetTimer(10)} type={(duration / 60) === 10 ? "primary" : "default"} className={(duration / 60) === 10 ? "!bg-primary/80" : "bg-muted text-muted-foreground"}>10 min</Button>
+                <Button onClick={() => resetTimer(5)} type={(duration / 60) === 5 ? "primary" : "default"} className={(duration / 60) === 5 ? "!bg-primary/80" : "bg-muted text-muted-foreground"}>5 min</Button>
+                <Button onClick={() => resetTimer(1 / 12)}>5 sec</Button>
             </div>
         </div>
     );
